@@ -1,5 +1,5 @@
 const axios = require("axios");
-const BASE_URL = "http://waternet.uz";
+const BASE_URL = "https://cadry.waternet.uz";
 
 
 const login_user =async (payload) => {
@@ -48,6 +48,29 @@ const delete_orders =async (payload) => {
     })
 }
 
+const client_products =async (payload) => {
+    return await axios.get(`${BASE_URL}/api/client/products`, {params:payload}).then((res) => {
+        return [null, res.data]
+    }).catch((error) => {
+        return [error, null]
+    })
+}
+
+const create_order =async (payload) => {
+    return await axios.post(`${BASE_URL}/api/client/create/order`, payload.data).then((res) => {
+        return [null, res.data]
+    }).catch((error) => {
+        return [error, null]
+    })
+}
+
+const edit_rate =async (payload) => {
+    return await axios.put(`${BASE_URL}/api/client/order-rates/${payload.client_id}/update`, payload.data).then((res) => {
+        return [null, res.data]
+    }).catch((error) => {
+        return [error, null]
+    })
+}
 
 
 
@@ -56,4 +79,5 @@ const delete_orders =async (payload) => {
 
 
 
-module.exports =  { login_user, register_user, user_info, orders, edit_orders, delete_orders}
+
+module.exports =  { login_user, register_user, user_info, orders, edit_orders, delete_orders, client_products, create_order, edit_rate }

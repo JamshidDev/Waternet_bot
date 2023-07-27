@@ -28,9 +28,22 @@ bot.use(session({
                 phone_number: null,
                 login: null,
                 pasword: null,
+                product_list: [],
+                order_list: [],
             }
         },
         storage: freeStorage(bot_token)
+    },
+    session_db: {
+        initial: () => {
+            return {
+                product_list: [],
+                select_product: null,
+                select_order: null,
+                select_order_count: null,
+            }
+        },
+        storage: new MemorySessionStorage()
     },
     conversation: {},
 }));
@@ -39,6 +52,10 @@ bot.use(session({
 
 bot.use(conversations());
 bot.use(createConversation(user_registretion));
+bot.use(createConversation(edit_order_conversation));
+bot.use(createConversation(create_order_count_conversation));
+// bot.use(createConversation(request_order_conversation));
+
 
 
 // register conversation
@@ -128,6 +145,162 @@ async function user_registretion(conversation, ctx) {
 
 }
 
+// client order edit conversation 
+
+async function edit_order_conversation(conversation, ctx) {
+    ctx.reply("Mahsulot miqdorini kiriting. \n" +
+        "Masalan: 1; 5; 20;  30;"
+    )
+
+    ctx = await conversation.wait()
+    if (validate_number(ctx, conversation)) {
+        do {
+            await ctx.reply("Noto'g'ri miqdor kiritildi....");
+            ctx = await conversation.wait();
+        } while (validate_number(ctx, conversation));
+    }
+    let select_product = await ctx.session.session_db.select_product;
+    let client_id = await ctx.session.freeStorage_db.client_id;
+    let product_count = +ctx.message.text;
+    let data = {
+        client_id: client_id,
+        order_id: select_product.id,
+        product_id: select_product.product.id,
+        count: product_count
+    }
+    const [info_err, info_res] = await Service.edit_orders({ data })
+
+    if (!info_err) {
+        ctx.reply("🔄 Yangilandi...");
+    } else {
+        ctx.reply("⚠️ Server xatosi")
+    }
+
+}
+
+async function create_order_count_conversation(conversation, ctx) {
+    let select_order = ctx.session.session_db.select_order;
+    ctx.reply("Tanlangan Mahsulot \n" +
+        "Turi:" + select_order.name +
+        "\n Narxi: " + select_order.price +
+        `\n \n <i>Buyurtma miqdorini kiriting!
+    Masalan 5, 10, 20, ... 1000
+    </i>`, {
+        parse_mode: "HTML"
+    }
+    );
+    ctx = await conversation.wait()
+
+    if (validate_number(ctx, conversation)) {
+        do {
+            await ctx.reply("Noto'g'ri miqdor kiritildi....");
+            ctx = await conversation.wait();
+        } while (validate_number(ctx, conversation));
+    }
+    conversation.session.session_db.select_order_count = ctx.message.text;
+    let client_id = ctx.session.freeStorage_db.client_id;
+    let data = {
+        client_id: client_id,
+        product_id: select_order.id,
+        count: ctx.message.text,
+        type: 'telegram',
+        lat: 0,
+        long: 0,
+        chat_id:ctx.msg.from.id,
+    }
+
+
+    const change_user_location = new InlineKeyboard()
+        .text("Xa", 'location_yes')
+        .text("Yo'q", 'location_no')
+
+    await ctx.reply("Lokatsiya kiritasizmi? ", {
+        reply_markup: change_user_location
+    })
+    const response = await conversation.waitForCallbackQuery(["location_yes", "location_no"], {
+        otherwise: (ctx) => ctx.reply("Tugmalardan bitasini tanlang!", { reply_markup: change_user_location }),
+    });
+    await response.answerCallbackQuery();
+
+
+    if (response.callbackQuery.data == 'location_yes') {
+        const get_location_menu = new Keyboard()
+            .requestLocation("Lokatsiyani yuborish").resized();
+
+        const over_location = new InlineKeyboard()
+            .text("Kerak emas", "over_location")
+        await ctx.reply("Lokatsiyani yuboring...", {
+            reply_markup: get_location_menu
+        })
+
+        ctx = await conversation.wait();
+        
+        if (ctx.message?.location == undefined) {
+            do {
+                // await ctx.answerCallbackQuery();
+                await ctx.reply("Iltimos lokatsiyani kiritng!", {
+                    reply_markup: over_location
+                });
+                ctx = await conversation.wait();
+            } while(checkLocation(ctx));
+        }
+
+        let location_cordinate = ctx?.message?.location
+        data.lat = location_cordinate ? location_cordinate.latitude : 0;
+        data.long = location_cordinate ? location_cordinate.longitude : 0;
+        ctx.reply("Kuting...", {
+            reply_markup: main_menu
+        });
+        request_create_order(data, ctx)
+
+    } else {
+        ctx.reply("Iltimos kuting...");
+        request_create_order(data, ctx)
+
+
+    }
+
+
+
+
+};
+
+
+// async function request_order_conversation(conversation, ctx) {
+//     ctx.reply("Bajarilmoqda! Kuting...");
+//     let select_order = ctx.session.session_db.select_order;
+//     let order_count = ctx.session.session_db.select_order_count;
+//     let client_id = ctx.session.freeStorage_db.client_id;
+
+//     console.log(select_order);
+//     console.log(order_count);
+//     console.log(client_id);
+
+// }
+
+async function request_create_order(data, ctx) {
+    const [info_err, order_list] = await Service.create_order({ data });
+
+    if (!info_err) {
+        console.log(order_list);
+        ctx.reply("Buyurtma qabul qilindi...!")
+    } else {
+        ctx.reply("⚠️ " + info_err.response.data.message)
+    }
+}
+
+
+ function checkLocation(ctx) {
+    if (ctx.update.callback_query?.data == 'over_location') {
+        ctx.answerCallbackQuery()
+        return false
+    } else {
+        let loc =ctx.message?.location == undefined;
+        return loc
+    }
+}
+
+
 
 
 
@@ -149,6 +322,10 @@ function validate_puhone_number(ctx, conversation) {
     }
 }
 
+function validate_number(ctx, conversation) {
+    return isNaN(+ctx.message.text)
+}
+
 
 
 
@@ -168,16 +345,25 @@ const main_menu = new Keyboard()
     .placeholder("Asosiy menu")
 
 
+
 const user_phone_menu = new Keyboard()
     .requestContact("Telefon raqam")
-    .resized()
+    .resized();
 
+
+
+
+
+
+const user_location_menu = new Menu("user_location_menu")
+    .text("Xa", (ctx) => ctx.reply("Selected Xa"))
+    .text("Yo'q", (ctx) => ctx.reply("Selected Yo'q"));
+pm.use(user_location_menu);
 
 
 
 
 pm.command("start", async (ctx) => {
-    console.log(ctx.session.freeStorage_db.client_id);
     if (ctx.session.freeStorage_db.is_register) {
         await ctx.reply("<b>Asosiy menu</b>", {
             reply_markup: main_menu,
@@ -188,13 +374,6 @@ pm.command("start", async (ctx) => {
     }
 
 })
-
-pm.on("callback_query:data", async (ctx) => {
-    if (ctx.callbackQuery.data == 'restart_login') {
-        await ctx.conversation.enter("user_registretion");
-    }
-    await ctx.answerCallbackQuery(); // remove loading animation
-});
 
 
 
@@ -218,40 +397,75 @@ pm.hears("ℹ️ Ma'lumotlarim", async (ctx) => {
 
 
 
-const my_order_menu = new Menu("dynamic");
 
 
+//clien order action menu
+const my_order_details_menu = new Menu("my_order_details_menu");
+pm.use(my_order_details_menu);
+my_order_details_menu.dynamic(async (ctx, range) => {
+    range
+        .text("✏️ Tahrirlash", async (ctx) => {
+            await ctx.conversation.enter("edit_order_conversation");
+        })
+        .row()
+        .text("🗑 O'chirish", async (ctx) => {
+            ctx.deleteMessage();
+            let order_id = ctx.session.session_db.select_product.id;
+            const [info_err, info_res] = await Service.delete_orders({ order_id });
+            if (!info_err) {
+                ctx.reply("🗑 Muvofaqiyatli o'chirildi...");
+            } else {
+                ctx.reply("⚠️ Server xatosi")
+            }
+        })
+        .row()
+});
+
+
+// client orders menu
+const my_order_menu = new Menu("my_order_menu");
+my_order_menu.dynamic(async (ctx, range) => {
+    let products = await ctx.session.session_db.product_list
+    products.forEach((item) => {
+        range
+            .text(item.product.name + " | " + item.product_count + " | " + "20-09-2023", (ctx) => {
+                ctx.session.session_db.select_product = item;
+                ctx.deleteMessage();
+
+                ctx.reply("Buyurtma: \n"
+                    + "Turi: " + item.product.name
+                    + "\n Soni: " + item.product_count + " ta"
+                    + "\n Narxi: " + item.price, {
+                    reply_markup: my_order_details_menu
+                })
+
+
+            })
+            .row();
+    });
+});
 pm.use(my_order_menu);
-// bot.use(menu);
+
+
 
 
 pm.hears("📑 Buyurtmalarim", async (ctx) => {
     let client_id = ctx.session.freeStorage_db.client_id;
 
-    const [info_err, info_res] = await Service.orders({ client_id })
-
+    const [info_err, product_list] = await Service.orders({ client_id })
     if (!info_err) {
-        my_order_menu.dynamic(() => {
-            let range = new MenuRange();
-
-            info_res.forEach(({ product }) => {
-                range
-                    .text(product.name + " | " + product.product_count + " | " + "20-09-2023", (ctx) => ctx.reply(`You chose 1`))
-                    .row();
-            });
-            return range;
-
-        })
-
+        ctx.session.session_db.product_list = product_list;
         await ctx.reply("📑 Buyurtmalarim", {
-            reply_markup: my_order_menu,
+            reply_markup: my_order_menu
         });
 
     } else {
         ctx.reply("⚠️ Server xatosi")
     }
-
 })
+
+
+
 
 
 
@@ -268,6 +482,91 @@ pm.hears('🔙 Profildan chiqish', async (ctx) => {
 
     })
 })
+
+
+
+
+
+
+// client orders menu
+const order_menu = new Menu("order_menu");
+order_menu.dynamic(async (ctx, range) => {
+    let orders_list = await ctx.session.freeStorage_db.order_list;
+    orders_list.forEach((item) => {
+        range
+            .text(item.name + " | " + item.price + " UZB", (ctx) => {
+                // ctx.deleteMessage();
+                ctx.session.session_db.select_order = item;
+                ctx.conversation.enter("create_order_count_conversation");
+                ctx.answerCallbackQuery()
+            })
+            .row();
+    });
+});
+pm.use(order_menu);
+
+
+
+
+
+
+
+
+
+pm.hears('🛍 Mahsulotlar', async (ctx) => {
+    let client_id = ctx.session.freeStorage_db.client_id;
+
+    const [info_err, order_list] = await Service.client_products({ client_id })
+
+    if (!info_err) {
+        ctx.session.freeStorage_db.order_list = order_list;
+        await ctx.reply("📑 Mahsulotlar", {
+            reply_markup: order_menu
+        });
+    } else {
+
+    }
+
+
+})
+
+
+
+
+
+// client order conversation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pm.on("callback_query:data", async (ctx) => {
+    // console.log(ctx.callbackQuery);
+    if (ctx.callbackQuery.data == 'restart_login') {
+        await ctx.conversation.enter("user_registretion");
+    }
+    await ctx.answerCallbackQuery(); // remove loading animation
+});
+
+
+
+
 
 
 
