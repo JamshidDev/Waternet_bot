@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node bot.js"
+  },
   "dependencies": {
     "@grammyjs/conversations": "^1.1.2",
     "@grammyjs/menu": "^1.2.1",
