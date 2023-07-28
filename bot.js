@@ -41,6 +41,7 @@ bot.use(session({
                 select_product: null,
                 select_order: null,
                 select_order_count: null,
+                callback_data:null,
             }
         },
         storage: new MemorySessionStorage()
@@ -54,7 +55,7 @@ bot.use(conversations());
 bot.use(createConversation(user_registretion));
 bot.use(createConversation(edit_order_conversation));
 bot.use(createConversation(create_order_count_conversation));
-// bot.use(createConversation(request_order_conversation));
+bot.use(createConversation(comment_conversation));
 
 
 
@@ -179,6 +180,7 @@ async function edit_order_conversation(conversation, ctx) {
 
 }
 
+
 async function create_order_count_conversation(conversation, ctx) {
     let select_order = ctx.session.session_db.select_order;
     ctx.reply("Tanlangan Mahsulot \n" +
@@ -266,18 +268,45 @@ async function create_order_count_conversation(conversation, ctx) {
 
 };
 
+// user comment conversation
+async function comment_conversation(conversation, ctx){
 
-// async function request_order_conversation(conversation, ctx) {
-//     ctx.reply("Bajarilmoqda! Kuting...");
-//     let select_order = ctx.session.session_db.select_order;
-//     let order_count = ctx.session.session_db.select_order_count;
-//     let client_id = ctx.session.freeStorage_db.client_id;
+    const comment_menu = new InlineKeyboard()
+    .text("No comment", "no_comment");
 
-//     console.log(select_order);
-//     console.log(order_count);
-//     console.log(client_id);
+   let comment_label = await ctx.reply(" 💬 Izoh yozing", {
+        reply_markup: comment_menu
+    });
 
-// }
+    const msg = await conversation.wait();
+    bot.api.deleteMessage(comment_label.chat.id, comment_label.message_id)
+    // await msg.answerCallbackQuery();
+    let client_id = ctx.session.freeStorage_db.client_id;
+    let comment = msg?.message?.text || "No comment";
+    let callback = ctx.session.session_db.callback_data
+    let payload = {
+        client_id,
+        data:{
+            comment, 
+            callback,
+        }
+    }
+    request_comment(msg, payload)
+    return
+}
+
+async function request_comment(ctx, payload){
+
+        const [info_err, info_res] = await Service.edit_rate(payload)
+        if(!info_err){
+            console.log(info_res.message);
+            ctx.reply(info_res.message)
+        }else{
+            console.log(info_err);
+            ctx.reply("⚠️ Server xatosi") 
+        }
+
+}
 
 async function request_create_order(data, ctx) {
     const [info_err, order_list] = await Service.create_order({ data });
@@ -572,28 +601,19 @@ pm.command("test", (ctx)=>{
 
 
 pm.on("callback_query:data", async (ctx) => {
-
+   
     let data = ctx.callbackQuery.data;
     if (data== 'restart_login') {
         await ctx.conversation.enter("user_registretion");
+        await ctx.answerCallbackQuery();
     }else if(check_callback(data)){
         console.log('request to server');
-        let client_id = ctx.session.freeStorage_db.client_id;
-        const [info_err, info_res] = await Service.edit_rate({ client_id, data:{
-            data,
-            comment:''
-        }});
-
-        if(!info_err){
-            console.log(info_res);
-            ctx.reply("Raxmat :)")
-        }else{
-            ctx.reply("⚠️ Server xatosi") 
-        }
-
-
+        await ctx.deleteMessage();
+        ctx.session.session_db.callback_data = data;
+        await ctx.conversation.enter("comment_conversation");
+        await ctx.answerCallbackQuery();
     }
-    await ctx.answerCallbackQuery(); // remove loading animation
+    
 });
 
 
