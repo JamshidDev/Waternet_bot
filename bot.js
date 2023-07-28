@@ -83,7 +83,6 @@ async function user_registretion(conversation, ctx) {
     if (!error) {
         let client_id = response.id;
         conversation.session.freeStorage_db.client_id = response.id;
-        console.log(response.id);
 
         await ctx.reply("✍️ To'liq Ism sharifingizni kiriting");
         let full_name = await conversation.wait();
@@ -284,8 +283,7 @@ async function request_create_order(data, ctx) {
     const [info_err, order_list] = await Service.create_order({ data });
 
     if (!info_err) {
-        console.log(order_list);
-        ctx.reply("Buyurtma qabul qilindi...!")
+        ctx.reply("✅ Buyurtma qabul qilindi!")
     } else {
         ctx.reply("⚠️ " + info_err.response.data.message)
     }
@@ -345,6 +343,7 @@ const main_menu = new Keyboard()
     .row()
     .text("🔙 Profildan chiqish")
     .placeholder("Asosiy menu")
+    .resized()
 
 
 
