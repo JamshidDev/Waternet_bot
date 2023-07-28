@@ -60,7 +60,7 @@ bot.use(createConversation(create_order_count_conversation));
 
 // register conversation
 async function user_registretion(conversation, ctx) {
-    await ctx.reply(" Salom, " + ctx.from.first_name + ".\nBotdan foydalanish uchun <b>waternet.uz</b> dan ro'yhatdan o'tgan <b>loginizni</b> kiriting"
+    await ctx.reply(" Salom ✋.  <b> " + ctx.from.first_name + "</b>.\nBotdan foydalanish uchun <b>waternet.uz</b> dan ro'yhatdan o'tgan <b>loginizni</b> kiriting"
         , {
             parse_mode: "HTML",
             reply_markup: { remove_keyboard: true }
@@ -116,7 +116,7 @@ async function user_registretion(conversation, ctx) {
 
         if (!reg_err) {
             conversation.session.freeStorage_db.is_register = true;
-            await ctx.reply("<i>Siz bo'tdan to'liq foydalana olasiz!</i>\n <b>Asosiy menu</b>", {
+            await ctx.reply("<i>Siz botdan to'liq foydalana olasiz!</i> 👏 \n <b>Asosiy menu</b>", {
                 reply_markup: main_menu,
                 parse_mode: "HTML",
             })
@@ -148,8 +148,10 @@ async function user_registretion(conversation, ctx) {
 // client order edit conversation 
 
 async function edit_order_conversation(conversation, ctx) {
-    ctx.reply("Mahsulot miqdorini kiriting. \n" +
-        "Masalan: 1; 5; 20;  30;"
+    ctx.reply("✍️ <b>Mahsulot miqdorini kiriting.</b> \n" +
+        "Masalan: 1; 5; 20;  30;", {
+            parse_mode:"HTML"
+        }
     )
 
     ctx = await conversation.wait()
@@ -383,8 +385,8 @@ pm.hears("ℹ️ Ma'lumotlarim", async (ctx) => {
     let client_id = ctx.session.freeStorage_db.client_id;
     const [info_err, info_res] = await Service.user_info({ client_id })
     if (!info_err) {
-        await ctx.reply("<b>Ism:</b> " + info_res.fullname + "\n<b>Balanc:</b> " + info_res.balance + "\n<b>Idish qarzlar:</b> " + info_res.container +
-            "\n<b>Telefon raqam:</b> " + info_res.phone + "\n<b>Organizatssiya:</b> " + info_res.organization.name
+        await ctx.reply("<b>Ism:</b> " + info_res.fullname + "\n<b>Hisob:</b> " + info_res.balance + " UZS" + "\n<b>Idish qarzlar:</b> " + info_res.container +
+            "\n<b>Telefon raqam:</b> " + info_res.phone + "\n<b>Toza suv tashkiloti:</b> " + info_res.organization.name
             , {
                 parse_mode: "HTML",
             })
@@ -405,6 +407,7 @@ pm.use(my_order_details_menu);
 my_order_details_menu.dynamic(async (ctx, range) => {
     range
         .text("✏️ Tahrirlash", async (ctx) => {
+            ctx.deleteMessage();
             await ctx.conversation.enter("edit_order_conversation");
         })
         .row()
@@ -432,11 +435,12 @@ my_order_menu.dynamic(async (ctx, range) => {
                 ctx.session.session_db.select_product = item;
                 ctx.deleteMessage();
 
-                ctx.reply("Buyurtma: \n"
-                    + "Turi: " + item.product.name
-                    + "\n Soni: " + item.product_count + " ta"
-                    + "\n Narxi: " + item.price, {
-                    reply_markup: my_order_details_menu
+                ctx.reply("<b>Buyurtma</b>: \n"
+                    + "<b>Turi</b>: " + item.product.name
+                    + "\n<b>Soni</b>: " + item.product_count + " ta"
+                    + "\n<b>Narxi</b>: " + item.price, {
+                    reply_markup: my_order_details_menu,
+                    parse_mode:"HTML"
                 })
 
 
@@ -477,7 +481,7 @@ pm.hears('🔙 Profildan chiqish', async (ctx) => {
         reply_markup: { remove_keyboard: true }
     })
     const re_register = new InlineKeyboard().text("🔙 Qayta login qilish", "restart_login")
-    ctx.reply("⚠️ Profildan muvofaqiyatli ravishda chiqdingiz", {
+    ctx.reply("🚪 Profildan muvofaqiyatli ravishda chiqdingiz", {
         reply_markup: re_register,
 
     })
