@@ -548,10 +548,22 @@ pm.hears('🛍 Mahsulotlar', async (ctx) => {
 
 
 
+function check_callback(data){
+    let key = data.split("_");
+    if(key[0]=='water'){
+        return true
+    }else{
+        false
+    }
+}
 
+pm.command("test", (ctx)=>{
+    ctx.reply("You call test");
 
+    let string = 'water_rete_23';
+    console.log(check_callback(string));
 
-
+})
 
 
 
@@ -560,9 +572,26 @@ pm.hears('🛍 Mahsulotlar', async (ctx) => {
 
 
 pm.on("callback_query:data", async (ctx) => {
-    // console.log(ctx.callbackQuery);
-    if (ctx.callbackQuery.data == 'restart_login') {
+
+    let data = ctx.callbackQuery.data;
+    if (data== 'restart_login') {
         await ctx.conversation.enter("user_registretion");
+    }else if(check_callback(data)){
+        console.log('request to server');
+        let client_id = ctx.session.freeStorage_db.client_id;
+        const [info_err, info_res] = await Service.edit_rate({ client_id, data:{
+            data,
+            comment:''
+        }});
+
+        if(!info_err){
+            console.log(info_res);
+            ctx.reply("Raxmat :)")
+        }else{
+            ctx.reply("⚠️ Server xatosi") 
+        }
+
+
     }
     await ctx.answerCallbackQuery(); // remove loading animation
 });
