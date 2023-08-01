@@ -402,7 +402,6 @@ pm.command("start", async (ctx) => {
     } else {
         await ctx.conversation.enter("user_registretion");
     }
-
 })
 
 
