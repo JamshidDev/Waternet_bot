@@ -7,13 +7,14 @@ const {
     conversations,
     createConversation,
 } = require("@grammyjs/conversations");
-const { phone } = require('phone');
-const Service = require('./services/service.js')
+const customLogger = require("./config/customLogger")
+const Service = require('./services/service.js');
 
 
 
 
 const bot_token = process.env.BOT_TOKEN;
+const error_log_group_id = -959075947;
 const bot = new Bot(bot_token);
 
 
@@ -41,7 +42,7 @@ bot.use(session({
                 select_product: null,
                 select_order: null,
                 select_order_count: null,
-                callback_data:null,
+                callback_data: null,
             }
         },
         storage: new MemorySessionStorage()
@@ -52,6 +53,25 @@ bot.use(session({
 
 
 bot.use(conversations());
+
+
+bot.on("my_chat_member", async (ctx) => {
+    if (ctx.update.my_chat_member.new_chat_member.status == "kicked") {
+        const stats = await ctx.conversation.active();
+        for (let key of Object.keys(stats)) {
+            await ctx.conversation.exit(key);
+        }
+        let user_id = ctx.from.id;
+        let [error, res_data] = await Service.delete_user_from_bot({user_id});
+        if(error){
+            error_msg_template(error, ctx)
+        }
+    }
+})
+
+
+
+
 bot.use(createConversation(user_registretion));
 bot.use(createConversation(edit_order_conversation));
 bot.use(createConversation(create_order_count_conversation));
@@ -61,85 +81,91 @@ bot.use(createConversation(comment_conversation));
 
 // register conversation
 async function user_registretion(conversation, ctx) {
-    await ctx.reply(" Salom ✋.  <b> " + ctx.from.first_name + "</b>.\nBotdan foydalanish uchun <b>waternet.uz</b> dan ro'yhatdan o'tgan <b>loginizni</b> kiriting"
-        , {
-            parse_mode: "HTML",
-            reply_markup: { remove_keyboard: true }
-        });
-
-    let user_login = await conversation.wait();
-    await ctx.reply(" 🔐 Parolingizni kiriting...");
-    let user_pasword = await conversation.wait();
-
-    await ctx.reply("⏰ Iltimos kuting...")
-    conversation.session.freeStorage_db.login = user_login.message.text;
-    conversation.session.freeStorage_db.password = user_pasword.message.text;
-    let data = {
-        login: user_login.message.text,
-        password: user_pasword.message.text,
-    }
-    // user login 
-    const [error, response] = await Service.login_user({ data })
-
-    if (!error) {
-        let client_id = response.id;
-        conversation.session.freeStorage_db.client_id = response.id;
-
-        await ctx.reply("✍️ To'liq Ism sharifingizni kiriting");
-        let full_name = await conversation.wait();
-
-
-        await ctx.reply("📞 Telefon raqamingizni kiriting \n Format: 977716004", {
-            reply_markup: user_phone_menu
-        });
-        ctx = await conversation.wait();
-
-
-        if (!validate_puhone_number(ctx, conversation)) {
-            do {
-                await ctx.reply("⚠️ Noto'g'ri formatdagi telefon raqam! \n Format: 977716004", {
-                    reply_markup: user_phone_menu
-                });
-                ctx = await conversation.wait();
-            } while (!validate_puhone_number(ctx, conversation));
-        }
-        await ctx.reply("✅ Ma'lumotlar qabul qilindi. Kuting...");
-        //    user register
-        let data = {
-            fullname: full_name.message.text,
-            phone: ctx.session.freeStorage_db.phone_number,
-            chat_id: ctx.chat.id,
-        }
-
-
-        const [reg_err, reg_res] = await Service.register_user({ client_id, data });
-
-        if (!reg_err) {
-            conversation.session.freeStorage_db.is_register = true;
-            await ctx.reply("<i>Siz botdan to'liq foydalana olasiz!</i> 👏 \n <b>Asosiy menu</b>", {
-                reply_markup: main_menu,
+    try {
+        await ctx.reply(" Salom ✋.  <b> " + ctx.from.first_name + "</b>.\nBotdan foydalanish uchun <b>waternet.uz</b> dan ro'yhatdan o'tgan <b>loginizni</b> kiriting"
+            , {
                 parse_mode: "HTML",
-            })
-            return
+                reply_markup: { remove_keyboard: true }
+            });
+
+        let user_login = await conversation.wait();
+        await ctx.reply(" 🔐 Parolingizni kiriting...");
+        let user_pasword = await conversation.wait();
+
+        await ctx.reply("⏰ Iltimos kuting...")
+        conversation.session.freeStorage_db.login = user_login.message.text;
+        conversation.session.freeStorage_db.password = user_pasword.message.text;
+        let data = {
+            login: user_login.message.text,
+            password: user_pasword.message.text,
+        }
+        // user login 
+        const [error, response] = await Service.login_user({ data })
+
+        if (!error) {
+            let client_id = response.id;
+            conversation.session.freeStorage_db.client_id = response.id;
+
+            await ctx.reply("✍️ To'liq Ism sharifingizni kiriting");
+            let full_name = await conversation.wait();
+
+
+            await ctx.reply("📞 Telefon raqamingizni kiriting \n Format: 977716004", {
+                reply_markup: user_phone_menu
+            });
+            ctx = await conversation.wait();
+
+
+            if (!validate_puhone_number(ctx, conversation)) {
+                do {
+                    await ctx.reply("⚠️ Noto'g'ri formatdagi telefon raqam! \n Format: 977716004", {
+                        reply_markup: user_phone_menu
+                    });
+                    ctx = await conversation.wait();
+                } while (!validate_puhone_number(ctx, conversation));
+            }
+            await ctx.reply("✅ Ma'lumotlar qabul qilindi. Kuting...");
+            //    user register
+            let data = {
+                fullname: full_name.message.text,
+                phone: ctx.session.freeStorage_db.phone_number,
+                chat_id: ctx.chat.id,
+            }
+            const [reg_err, reg_res] = await Service.register_user({ client_id, data });
+
+            if (!reg_err) {
+                conversation.session.freeStorage_db.is_register = true;
+                await ctx.reply("<i>Siz botdan to'liq foydalana olasiz!</i> 👏 \n <b>Asosiy menu</b>", {
+                    reply_markup: main_menu,
+                    parse_mode: "HTML",
+                })
+                return
+
+            } else {
+                const re_register = new InlineKeyboard().text("🔙 Qayta login qilish", "restart_login")
+                await ctx.reply("⚠️ Ro'yhatga olish vaqtida kutilmagan xatolik yuz berdi...", {
+                    reply_markup: re_register
+                })
+                return
+            }
+
+
+
 
         } else {
+            // user login error
             const re_register = new InlineKeyboard().text("🔙 Qayta login qilish", "restart_login")
-            await ctx.reply("⚠️ Ro'yhatga olish vaqtida kutilmagan xatolik yuz berdi...", {
+            ctx.reply("⚠️ Parol yoki login noto'g'ri", {
                 reply_markup: re_register
             })
             return
         }
-
-
-
-
-    } else {
-        // user login error
-        const re_register = new InlineKeyboard().text("🔙 Qayta login qilish", "restart_login")
-        ctx.reply("⚠️ Parol yoki login noto'g'ri", {
-            reply_markup: re_register
-        })
-        return
+    } catch (error) {
+        customLogger.log({
+            level: 'error',
+            message: error
+        });
+        error_msg_template(error, ctx)
     }
 
 
@@ -150,8 +176,8 @@ async function user_registretion(conversation, ctx) {
 async function edit_order_conversation(conversation, ctx) {
     ctx.reply("✍️ <b>Mahsulot miqdorini kiriting.</b> \n" +
         "Masalan: 1; 5; 20;  30;", {
-            parse_mode:"HTML"
-        }
+        parse_mode: "HTML"
+    }
     )
 
     ctx = await conversation.wait()
@@ -209,7 +235,7 @@ async function create_order_count_conversation(conversation, ctx) {
         type: 'telegram',
         lat: 0,
         long: 0,
-        chat_id:ctx.msg.from.id,
+        chat_id: ctx.msg.from.id,
     }
 
 
@@ -237,7 +263,7 @@ async function create_order_count_conversation(conversation, ctx) {
         })
 
         ctx = await conversation.wait();
-        
+
         if (ctx.message?.location == undefined) {
             do {
                 // await ctx.answerCallbackQuery();
@@ -245,7 +271,7 @@ async function create_order_count_conversation(conversation, ctx) {
                     reply_markup: over_location
                 });
                 ctx = await conversation.wait();
-            } while(checkLocation(ctx));
+            } while (checkLocation(ctx));
         }
 
         let location_cordinate = ctx?.message?.location
@@ -269,12 +295,12 @@ async function create_order_count_conversation(conversation, ctx) {
 };
 
 // user comment conversation
-async function comment_conversation(conversation, ctx){
+async function comment_conversation(conversation, ctx) {
 
     const comment_menu = new InlineKeyboard()
-    .text("No comment", "no_comment");
+        .text("No comment", "no_comment");
 
-   let comment_label = await ctx.reply(" 💬 Izoh yozing", {
+    let comment_label = await ctx.reply(" 💬 Izoh yozing", {
         reply_markup: comment_menu
     });
 
@@ -282,12 +308,12 @@ async function comment_conversation(conversation, ctx){
     bot.api.deleteMessage(comment_label.chat.id, comment_label.message_id)
     // await msg.answerCallbackQuery();
     let client_id = ctx.session.freeStorage_db.client_id;
-    let comment = msg?.message?.text || "No comment";
+    let comment = msg?.message?.text || null;
     let callback = ctx.session.session_db.callback_data
     let payload = {
         client_id,
-        data:{
-            comment, 
+        data: {
+            comment,
             callback,
         }
     }
@@ -295,16 +321,20 @@ async function comment_conversation(conversation, ctx){
     return
 }
 
-async function request_comment(ctx, payload){
+async function request_comment(ctx, payload) {
 
-        const [info_err, info_res] = await Service.edit_rate(payload)
-        if(!info_err){
-            console.log(info_res.message);
-            ctx.reply(info_res.message)
-        }else{
-            console.log(info_err);
-            ctx.reply("⚠️ Server xatosi") 
-        }
+    const [info_err, info_res] = await Service.edit_rate(payload)
+    if (!info_err) {
+      
+        ctx.reply(info_res.message)
+    } else {
+        ctx.reply("⚠️ Server xatosi");
+        customLogger.log({
+            level: 'error',
+            message: info_err
+        });
+        error_msg_template(info_err, ctx)
+    }
 
 }
 
@@ -319,15 +349,26 @@ async function request_create_order(data, ctx) {
 }
 
 
- function checkLocation(ctx) {
+function checkLocation(ctx) {
     if (ctx.update.callback_query?.data == 'over_location') {
         ctx.answerCallbackQuery()
         return false
     } else {
-        let loc =ctx.message?.location == undefined;
+        let loc = ctx.message?.location == undefined;
         return loc
     }
 }
+
+
+
+const error_msg_template = async (msg, ctx) => {
+    let text = `⚠️ <b>Kutilmagan xatolik yuz berdi</b> \n\n 💬 <b>Xatolik sababi: </b> <i>${msg}</i>`
+    bot.api.sendMessage(error_log_group_id, text, {
+        parse_mode: "HTML"
+    })
+
+}
+
 
 
 
@@ -391,8 +432,16 @@ const user_location_menu = new Menu("user_location_menu")
 pm.use(user_location_menu);
 
 
+const my_login_btn_menu = new Menu('my_login_btn_menu')
+    .text("Kirish", async (ctx) => {
+        ctx.answerCallbackQuery();
+        ctx.deleteMessage();
+        await ctx.conversation.enter("user_registretion");
 
+    })
+    .row();
 
+pm.use(my_login_btn_menu)
 pm.command("start", async (ctx) => {
     if (ctx.session.freeStorage_db.is_register) {
         await ctx.reply("<b>Asosiy menu</b>", {
@@ -400,8 +449,15 @@ pm.command("start", async (ctx) => {
             parse_mode: "HTML",
         })
     } else {
-        await ctx.conversation.enter("user_registretion");
+        ctx.reply(`Salom ${ctx.from.first_name}.\n\n💧<i>Bizning Waternet korxonasining rasmiy botiga xush kelibsiz.</i> \n\n <i>Botdan foydalanish uchun kirish tugmasini bosing</i>`, {
+            parse_mode: "HTML",
+            reply_markup: my_login_btn_menu,
+
+        })
+
     }
+
+
 })
 
 
@@ -416,6 +472,7 @@ pm.hears("ℹ️ Ma'lumotlarim", async (ctx) => {
             "\n<b>Telefon raqam:</b> " + info_res.phone + "\n<b>Toza suv tashkiloti:</b> " + info_res.organization.name
             , {
                 parse_mode: "HTML",
+                reply_markup: my_login_btn_menu
             })
     } else {
         ctx.reply("⚠️ Server xatosi")
@@ -467,7 +524,7 @@ my_order_menu.dynamic(async (ctx, range) => {
                     + "\n<b>Soni</b>: " + item.product_count + " ta"
                     + "\n<b>Narxi</b>: " + item.price, {
                     reply_markup: my_order_details_menu,
-                    parse_mode:"HTML"
+                    parse_mode: "HTML"
                 })
 
 
@@ -568,14 +625,6 @@ pm.hears('🛍 Mahsulotlar', async (ctx) => {
 // client order conversation
 
 
-
-
-
-
-
-
-
-
 function check_callback(data){
     let key = data.split("_");
     if(key[0]=='water'){
@@ -585,34 +634,29 @@ function check_callback(data){
     }
 }
 
-pm.command("test", (ctx)=>{
-    ctx.reply("You call test");
-
-    let string = 'water_rete_23';
-    console.log(check_callback(string));
-
-})
-
-
-
-
-
-
 
 pm.on("callback_query:data", async (ctx) => {
-   
-    let data = ctx.callbackQuery.data;
-    if (data== 'restart_login') {
-        await ctx.conversation.enter("user_registretion");
-        await ctx.answerCallbackQuery();
-    }else if(check_callback(data)){
-        console.log('request to server');
-        await ctx.deleteMessage();
-        ctx.session.session_db.callback_data = data;
-        await ctx.conversation.enter("comment_conversation");
-        await ctx.answerCallbackQuery();
+    try {
+        let data = ctx.callbackQuery.data;
+        if (data == 'restart_login') {
+            await ctx.conversation.enter("user_registretion");
+            await ctx.answerCallbackQuery();
+        } else if (check_callback(data)) {
+            await ctx.deleteMessage();
+            ctx.session.session_db.callback_data = data;
+            await ctx.conversation.enter("comment_conversation");
+            await ctx.answerCallbackQuery();
+        }
+    } catch (error) {
+        customLogger.log({
+            level: 'error',
+            message: error
+        });
+        error_msg_template(error, ctx)
     }
-    
+
+
+
 });
 
 
@@ -630,14 +674,16 @@ pm.on("callback_query:data", async (ctx) => {
 
 
 
-
-
-
-
-
-
-
-
+bot.catch((err) => {
+    const ctx = err.ctx;
+    console.error(`Error while handling update ${ctx.update.update_id}:`);
+    const e = err.error;
+    customLogger.log({
+        level: 'error',
+        message: e
+    });
+    error_msg_template(e, ctx)
+});
 
 
 bot.start();
